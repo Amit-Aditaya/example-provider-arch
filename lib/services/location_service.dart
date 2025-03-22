@@ -1,6 +1,5 @@
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../util/constants/constants.dart';
 import 'notification_service.dart';
@@ -35,10 +34,6 @@ class LocationService {
     // Track the last notification time to avoid too frequent notifications
     DateTime lastNotificationTime = DateTime.now();
 
-    // Load the initial showNotifications preference
-    final prefs = await SharedPreferences.getInstance();
-    showNotifications = prefs.getBool('showNotifications') ?? true;
-
     // Continuously track location in the background
     while (true) {
       try {
@@ -46,12 +41,6 @@ class LocationService {
         final Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
         );
-
-        // Store location data
-        await prefs.setDouble('latitude', position.latitude);
-        await prefs.setDouble('longitude', position.longitude);
-        await prefs.setDouble('accuracy', position.accuracy);
-        await prefs.setString('timestamp', DateTime.now().toIso8601String());
 
         // Update notification with latest location
         if (service is AndroidServiceInstance) {
