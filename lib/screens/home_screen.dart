@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/location_tracking_provider.dart';
-import '../components/location_display.dart';
 import 'summary_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -16,12 +14,12 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(context,
-              MaterialPageRoute(builder: (context) => const SummaryScreen()));
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SummaryScreen()),
+          );
         },
-      ),
-      appBar: AppBar(
-        title: const Text('Background Location Tracker'),
+        child: const Icon(Icons.list),
       ),
       body: Center(
         child: Column(
@@ -36,9 +34,7 @@ class HomeScreen extends StatelessWidget {
                 );
               },
             ),
-
             const SizedBox(height: 20),
-
             ElevatedButton(
               onPressed: () => locationProvider.startLocationTracking(),
               style: ElevatedButton.styleFrom(
@@ -48,15 +44,13 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               child: const Text(
-                'Start Location Tracking',
+                'Clock In',
                 style: TextStyle(fontSize: 16),
               ),
             ),
-
             const SizedBox(
               height: 10,
             ),
-
             ElevatedButton(
               onPressed: () => locationProvider.stopLocationTracking(),
               style: ElevatedButton.styleFrom(
@@ -66,31 +60,9 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               child: const Text(
-                'Stop Location Tracking',
+                'Clock Out',
                 style: TextStyle(fontSize: 16),
               ),
-            ),
-
-            // ValueListenableBuilder<String>(
-            //   valueListenable: locationProvider.timeAtHome,
-            //   builder: (context, timeAtHome, _) {
-            //     return Text(
-            //       timeAtHome,
-            //       style: const TextStyle(fontSize: 16),
-            //     );
-            //   },
-            // ),
-
-            const SizedBox(height: 16),
-
-            const SizedBox(height: 30),
-
-            // Current location display
-            ValueListenableBuilder<Position?>(
-              valueListenable: locationProvider.currentPosition,
-              builder: (context, position, _) {
-                return LocationDisplay(position: position);
-              },
             ),
           ],
         ),

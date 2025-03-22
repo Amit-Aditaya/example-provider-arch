@@ -21,17 +21,24 @@ class SummaryScreen extends StatelessWidget {
               final summaries = box.values.toList()
                 ..sort((a, b) => b.date.compareTo(a.date));
 
-              return ListView.builder(
-                itemCount: summaries.length,
-                itemBuilder: (context, index) {
-                  final summary = summaries[index];
-                  return ListTile(
-                    title: Text(summary.formattedDate),
-                    subtitle: Text('Home Time: ${summary.formattedTimeSpent}'),
-                    trailing: Text('Total: ${summary.formattedTotalTime}'),
-                  );
-                },
-              );
+              if (summaries.isEmpty) {
+                return const Center(
+                  child: Text('No summary'),
+                );
+              } else {
+                return ListView.builder(
+                  itemCount: summaries.length,
+                  itemBuilder: (context, index) {
+                    final summary = summaries[index];
+                    return ListTile(
+                      title: Text(summary.formattedDate),
+                      subtitle:
+                          Text('Home Time: ${summary.formattedTimeSpent}'),
+                      trailing: Text('Total: ${summary.formattedTotalTime}'),
+                    );
+                  },
+                );
+              }
             },
           );
         },
