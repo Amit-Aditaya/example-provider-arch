@@ -1,10 +1,9 @@
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:location/location.dart' as loc;
-import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:flutter/foundation.dart';
-import '../util/notifications_helper.dart';
+import 'package:geocoding/geocoding.dart' as geocoding;
+import 'package:location/location.dart' as loc;
+
 import '../models/location.dart';
+import '../util/notifications_helper.dart';
 
 class LocationProvider with ChangeNotifier {
   static final LocationProvider _singleton = LocationProvider._internal();
@@ -39,7 +38,8 @@ class LocationProvider with ChangeNotifier {
     if (permissionGranted == loc.PermissionStatus.denied) {
       permissionGranted = await location.requestPermission();
       if (permissionGranted != loc.PermissionStatus.granted) {
-        NotificationsHelper().showError('Location permission denied. Please enable location services.');
+        NotificationsHelper().showError(
+            'Location permission denied. Please enable location services.');
         return false;
       }
     }
@@ -52,16 +52,15 @@ class LocationProvider with ChangeNotifier {
       if (!serviceEnabled) {
         serviceEnabled = await location.requestService();
       }
-      _currentLocationData = await location.getLocation().timeout(const Duration(seconds: 6));
+      _currentLocationData =
+          await location.getLocation().timeout(const Duration(seconds: 6));
       _currentLocation = await _getUserLocation();
     } catch (e) {
       NotificationsHelper().printIfDebugMode('Location fetching failed: $e');
     }
   }
 
-  Future<void> updateLocationOnMap(double lat, double lng) async {
-    //TODO update my location on the server
-  }
+  Future<void> updateLocationOnMap(double lat, double lng) async {}
 
   Future<Location?> _getUserLocation() async {
     final locationPlaceMark = await _getLocationPlaceMark();
@@ -78,8 +77,10 @@ class LocationProvider with ChangeNotifier {
   }
 
   Future<geocoding.Placemark?> _getLocationPlaceMark() async {
-    if (_currentLocationData?.latitude == null || _currentLocationData?.longitude == null) return null;
-    final List<geocoding.Placemark> placeMarks = await geocoding.placemarkFromCoordinates(
+    if (_currentLocationData?.latitude == null ||
+        _currentLocationData?.longitude == null) return null;
+    final List<geocoding.Placemark> placeMarks =
+        await geocoding.placemarkFromCoordinates(
       _currentLocationData!.latitude!,
       _currentLocationData!.longitude!,
     );
