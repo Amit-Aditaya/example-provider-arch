@@ -10,7 +10,6 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Access the location provider
     final locationProvider = Provider.of<LocationTrackingProvider>(context);
 
     return Scaffold(
@@ -21,7 +20,6 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Status message using ValueListenableBuilder
             ValueListenableBuilder<String>(
               valueListenable: locationProvider.statusMessage,
               builder: (context, statusMessage, _) {
@@ -34,7 +32,6 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // Toggle tracking button using ValueListenableBuilder
             ElevatedButton(
               onPressed: () => locationProvider.startLocationTracking(),
               style: ElevatedButton.styleFrom(
@@ -67,29 +64,17 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 16),
-
-            // // Toggle notifications button
-            // ValueListenableBuilder<bool>(
-            //   valueListenable: locationProvider.showNotifications,
-            //   builder: (context, showNotifications, _) {
-            //     return ElevatedButton(
-            //       onPressed: () => locationProvider.toggleNotifications(),
-            //       style: ElevatedButton.styleFrom(
-            //         padding: const EdgeInsets.symmetric(
-            //           horizontal: 24,
-            //           vertical: 12,
-            //         ),
-            //       ),
-            //       child: Text(
-            //         showNotifications
-            //             ? 'Disable Notifications'
-            //             : 'Enable Notifications',
-            //         style: const TextStyle(fontSize: 16),
-            //       ),
+            // ValueListenableBuilder<String>(
+            //   valueListenable: locationProvider.timeAtHome,
+            //   builder: (context, timeAtHome, _) {
+            //     return Text(
+            //       timeAtHome,
+            //       style: const TextStyle(fontSize: 16),
             //     );
             //   },
             // ),
+
+            const SizedBox(height: 16),
 
             const SizedBox(height: 30),
 

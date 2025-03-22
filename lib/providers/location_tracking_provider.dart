@@ -1,74 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class LocationTrackingProvider extends ChangeNotifier {
   ValueNotifier<bool> isTracking = ValueNotifier<bool>(false);
   ValueNotifier<Position?> currentPosition = ValueNotifier<Position?>(null);
   ValueNotifier<String> statusMessage =
       ValueNotifier<String>('Location tracking is stopped');
-  ValueNotifier<bool> showNotifications = ValueNotifier<bool>(true);
+  List<Position> locationHistory = [];
+  Duration _timeAtHome = Duration.zero;
+
+  static Position homeLocation = Position(
+    latitude: 23.8149,
+    longitude: 90.4336,
+    timestamp: DateTime.now(),
+    accuracy: 0,
+    altitude: 0,
+    heading: 0,
+    speed: 0,
+    speedAccuracy: 0,
+    altitudeAccuracy: 0,
+    headingAccuracy: 0,
+  );
+  static const double homeRadius = 500;
 
   LocationTrackingProvider() {
     _checkServiceStatus();
     _listenForLocationUpdates();
-    _loadSettings();
   }
 
   void _listenForLocationUpdates() {
     FlutterBackgroundService().on('updateLocation').listen((event) {
       if (event != null) {
         final position = Position(
-          longitude: event['longitude'],
-          latitude: event['latitude'],
+          longitude: event['longitude'] ?? 0.0,
+          latitude: event['latitude'] ?? 0.0,
           timestamp: DateTime.parse(event['timestamp']),
-          accuracy: event['accuracy'],
-          altitude: 0,
-          heading: 0,
-          speed: 0,
-          speedAccuracy: 0,
-          altitudeAccuracy: 0,
-          headingAccuracy: 0,
+          accuracy: event['accuracy'] ?? 0.0,
+          altitude: event['altitude']?.toDouble() ?? 0.0,
+          heading: event['heading']?.toDouble() ?? 0.0,
+          speed: event['speed']?.toDouble() ?? 0.0,
+          speedAccuracy: event['speedAccuracy']?.toDouble() ?? 0.0,
+          altitudeAccuracy: event['altitudeAccuracy']?.toDouble() ?? 0.0,
+          headingAccuracy: event['headingAccuracy']?.toDouble() ?? 0.0,
         );
+
         currentPosition.value = position;
+        locationHistory.add(position);
+        notifyListeners();
       }
     });
   }
 
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    showNotifications.value = prefs.getBool('showNotifications') ?? true;
-  }
-
-  Future<void> toggleNotifications() async {
-    showNotifications.value = !showNotifications.value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('showNotifications', showNotifications.value);
-
-    // Update the background service with the new setting
-    final service = FlutterBackgroundService();
-    service.invoke('updateSettings', {
-      'showNotifications': showNotifications.value,
-    });
-
-    notifyListeners();
-  }
-
-  Future<void> _checkServiceStatus() async {
-    final service = FlutterBackgroundService();
-    final bool running = await service.isRunning();
-    isTracking.value = running;
-    statusMessage.value = running
-        ? 'Location tracking is active'
-        : 'Location tracking is stopped';
-    notifyListeners();
-  }
-
   Future<void> startLocationTracking() async {
+    locationHistory.clear();
+    _timeAtHome = Duration.zero;
     final service = FlutterBackgroundService();
 
-    // Check and request permissions
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -85,23 +73,13 @@ class LocationTrackingProvider extends ChangeNotifier {
       return;
     }
 
-    // Check if location services are enabled
-    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
+    if (!await Geolocator.isLocationServiceEnabled()) {
       statusMessage.value = 'Location services are disabled';
       notifyListeners();
       return;
     }
 
-    // Start the background service
     await service.startService();
-
-    // Pass current notification settings to the service
-    service.invoke('updateSettings', {
-      'showNotifications': showNotifications.value,
-    });
-
-    // Update local state
     isTracking.value = true;
     statusMessage.value = 'Location tracking is active';
     notifyListeners();
@@ -109,13 +87,69 @@ class LocationTrackingProvider extends ChangeNotifier {
 
   Future<void> stopLocationTracking() async {
     final service = FlutterBackgroundService();
-
-    // Stop the background service
     service.invoke('stopService');
 
-    // Update local state
+    _calculateTimeAtHome();
+
     isTracking.value = false;
-    statusMessage.value = 'Location tracking is stopped';
+    statusMessage.value =
+        'Stopped. Time at home: ${_formatDuration(_timeAtHome)}';
+    notifyListeners();
+  }
+
+  void _calculateTimeAtHome() {
+    _timeAtHome = Duration.zero;
+    if (locationHistory.isEmpty) return;
+
+    DateTime? entryTime;
+    bool isInside = false;
+
+    // Sort by timestamp and filter valid positions
+    final sortedHistory = locationHistory
+        .where((p) => p.timestamp != 0)
+        .toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    for (final position in sortedHistory) {
+      final distance = Geolocator.distanceBetween(
+        homeLocation.latitude,
+        homeLocation.longitude,
+        position.latitude,
+        position.longitude,
+      );
+
+      if (distance <= homeRadius) {
+        if (!isInside) {
+          isInside = true;
+          entryTime = position.timestamp;
+        }
+      } else {
+        if (isInside) {
+          isInside = false;
+          if (entryTime != null) {
+            _timeAtHome += position.timestamp.difference(entryTime);
+          }
+          entryTime = null;
+        }
+      }
+    }
+
+    if (isInside && entryTime != null) {
+      _timeAtHome += DateTime.now().difference(entryTime);
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours.toString().padLeft(2, '0');
+    final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
+    return '$hours h $minutes m';
+  }
+
+  Duration get timeAtHome => _timeAtHome;
+
+  Future<void> _checkServiceStatus() async {
+    final service = FlutterBackgroundService();
+    isTracking.value = await service.isRunning();
     notifyListeners();
   }
 }
