@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hive_flutter/adapters.dart';
+
+import '../models/daily_summary.dart';
 
 class LocationTrackingProvider extends ChangeNotifier {
+  Box<DailySummary> get dailySummariesBox =>
+      Hive.box<DailySummary>('dailySummaries');
+
   ValueNotifier<bool> isTracking = ValueNotifier<bool>(false);
   ValueNotifier<Position?> currentPosition = ValueNotifier<Position?>(null);
   ValueNotifier<String> statusMessage =
@@ -94,6 +100,7 @@ class LocationTrackingProvider extends ChangeNotifier {
     isTracking.value = false;
     statusMessage.value =
         'Stopped. Time at home: ${_formatDuration(_timeAtHome)}';
+    _saveDailySummary(_timeAtHome);
     notifyListeners();
   }
 
@@ -152,4 +159,35 @@ class LocationTrackingProvider extends ChangeNotifier {
     isTracking.value = await service.isRunning();
     notifyListeners();
   }
+
+  void _saveDailySummary(Duration timeAtHome) {
+    final box = Hive.box<DailySummary>('dailySummaries');
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final totalTrackedTime = locationHistory.isNotEmpty
+        ? now.difference(locationHistory.first.timestamp)
+        : Duration.zero;
+
+    // Get existing or create new summary
+    DailySummary summary = box.get(today.toIso8601String()) ??
+        DailySummary(
+          date: today,
+          timeSpentAtHome: Duration.zero,
+          totalTrackedTime: Duration.zero,
+        );
+
+    // Update values
+    summary = summary.copyWith(
+      timeSpentAtHome: summary.timeSpentAtHome + timeAtHome,
+      totalTrackedTime: summary.totalTrackedTime + totalTrackedTime,
+    );
+
+    // Save using box.put() instead of summary.save()
+    box.put(today.toIso8601String(), summary);
+  }
+
+  // Add helper method to get all summaries
+  List<DailySummary> get allSummaries => dailySummariesBox.values.toList()
+    ..sort((a, b) => b.date.compareTo(a.date));
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/location_tracking_provider.dart';
 import '../components/location_display.dart';
+import 'summary_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -13,6 +14,12 @@ class HomeScreen extends StatelessWidget {
     final locationProvider = Provider.of<LocationTrackingProvider>(context);
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(context,
+              MaterialPageRoute(builder: (context) => const SummaryScreen()));
+        },
+      ),
       appBar: AppBar(
         title: const Text('Background Location Tracker'),
       ),
