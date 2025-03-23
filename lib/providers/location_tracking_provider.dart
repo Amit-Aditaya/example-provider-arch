@@ -15,6 +15,8 @@ class LocationTrackingProvider extends ChangeNotifier {
       ValueNotifier<String>('Location tracking is stopped');
   List<Position> locationHistory = [];
   Duration _timeAtHome = Duration.zero;
+  Duration _timeAtOffice = Duration.zero;
+  Duration _timeTraveling = Duration.zero;
 
   static Position homeLocation = Position(
     latitude: 23.8149,
@@ -28,7 +30,22 @@ class LocationTrackingProvider extends ChangeNotifier {
     altitudeAccuracy: 0,
     headingAccuracy: 0,
   );
+
+  static Position officeLocation = Position(
+    latitude: 23.7945, // Example coordinates
+    longitude: 90.4142,
+    timestamp: DateTime.now(),
+    accuracy: 0,
+    altitude: 0,
+    heading: 0,
+    speed: 0,
+    speedAccuracy: 0,
+    altitudeAccuracy: 0,
+    headingAccuracy: 0,
+  );
+
   static const double homeRadius = 500;
+  static const double officeRadius = 500;
 
   LocationTrackingProvider() {
     _checkServiceStatus();
@@ -61,6 +78,8 @@ class LocationTrackingProvider extends ChangeNotifier {
   Future<void> startLocationTracking() async {
     locationHistory.clear();
     _timeAtHome = Duration.zero;
+    _timeAtOffice = Duration.zero;
+    _timeTraveling = Duration.zero;
     final service = FlutterBackgroundService();
 
     LocationPermission permission = await Geolocator.checkPermission();
@@ -95,54 +114,83 @@ class LocationTrackingProvider extends ChangeNotifier {
     final service = FlutterBackgroundService();
     service.invoke('stopService');
 
-    _calculateTimeAtHome();
+    _calculateTimeSpent();
 
     isTracking.value = false;
-    statusMessage.value =
-        'Stopped. Time at home: ${_formatDuration(_timeAtHome)}';
-    _saveDailySummary(_timeAtHome);
+    statusMessage.value = 'Tracking Stopped.';
+    // 'Home: ${_formatDuration(_timeAtHome)}, '
+    // 'Office: ${_formatDuration(_timeAtOffice)}, '
+    // 'Traveling: ${_formatDuration(_timeTraveling)}';
+
+    _saveDailySummary();
     notifyListeners();
   }
 
-  void _calculateTimeAtHome() {
+  void _calculateTimeSpent() {
     _timeAtHome = Duration.zero;
+    _timeAtOffice = Duration.zero;
+    _timeTraveling = Duration.zero;
+
     if (locationHistory.isEmpty) return;
 
-    DateTime? entryTime;
-    bool isInside = false;
-
-    // Sort by timestamp and filter valid positions
-    final sortedHistory = locationHistory
-        .where((p) => p.timestamp != 0)
-        .toList()
+    final sortedHistory = locationHistory.toList()
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
-    for (final position in sortedHistory) {
-      final distance = Geolocator.distanceBetween(
-        homeLocation.latitude,
-        homeLocation.longitude,
-        position.latitude,
-        position.longitude,
-      );
+    String currentZone = 'traveling';
+    DateTime? zoneEntryTime;
 
-      if (distance <= homeRadius) {
-        if (!isInside) {
-          isInside = true;
-          entryTime = position.timestamp;
-        }
-      } else {
-        if (isInside) {
-          isInside = false;
-          if (entryTime != null) {
-            _timeAtHome += position.timestamp.difference(entryTime);
-          }
-          entryTime = null;
-        }
+    for (final position in sortedHistory) {
+      final newZone = _determineZone(position);
+
+      if (zoneEntryTime != null && currentZone != newZone) {
+        final duration = position.timestamp.difference(zoneEntryTime);
+        _addDuration(currentZone, duration);
       }
+
+      currentZone = newZone;
+      zoneEntryTime = position.timestamp;
     }
 
-    if (isInside && entryTime != null) {
-      _timeAtHome += DateTime.now().difference(entryTime);
+    // Add remaining time from last position to now
+    if (zoneEntryTime != null) {
+      final duration = DateTime.now().difference(zoneEntryTime);
+      _addDuration(currentZone, duration);
+    }
+  }
+
+  String _determineZone(Position position) {
+    final homeDistance = Geolocator.distanceBetween(
+      homeLocation.latitude,
+      homeLocation.longitude,
+      position.latitude,
+      position.longitude,
+    );
+
+    if (homeDistance <= homeRadius) return 'home';
+
+    final officeDistance = Geolocator.distanceBetween(
+      officeLocation.latitude,
+      officeLocation.longitude,
+      position.latitude,
+      position.longitude,
+    );
+
+    if (officeDistance <= officeRadius) return 'office';
+
+    return 'traveling';
+  }
+
+  void _addDuration(String zone, Duration duration) {
+    switch (zone) {
+      case 'home':
+        _timeAtHome += duration;
+        break;
+      case 'office':
+        _timeAtOffice += duration;
+        break;
+      case 'traveling':
+        _timeTraveling += duration;
+        break;
     }
   }
 
@@ -152,15 +200,13 @@ class LocationTrackingProvider extends ChangeNotifier {
     return '$hours h $minutes m';
   }
 
-  Duration get timeAtHome => _timeAtHome;
-
   Future<void> _checkServiceStatus() async {
     final service = FlutterBackgroundService();
     isTracking.value = await service.isRunning();
     notifyListeners();
   }
 
-  void _saveDailySummary(Duration timeAtHome) {
+  void _saveDailySummary() {
     final box = Hive.box<DailySummary>('dailySummaries');
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -169,25 +215,25 @@ class LocationTrackingProvider extends ChangeNotifier {
         ? now.difference(locationHistory.first.timestamp)
         : Duration.zero;
 
-    // Get existing or create new summary
     DailySummary summary = box.get(today.toIso8601String()) ??
         DailySummary(
           date: today,
           timeSpentAtHome: Duration.zero,
+          timeSpentAtOffice: Duration.zero,
+          timeSpentTraveling: Duration.zero,
           totalTrackedTime: Duration.zero,
         );
 
-    // Update values
     summary = summary.copyWith(
-      timeSpentAtHome: summary.timeSpentAtHome + timeAtHome,
+      timeSpentAtHome: summary.timeSpentAtHome + _timeAtHome,
+      timeSpentAtOffice: summary.timeSpentAtOffice + _timeAtOffice,
+      timeSpentTraveling: summary.timeSpentTraveling + _timeTraveling,
       totalTrackedTime: summary.totalTrackedTime + totalTrackedTime,
     );
 
-    // Save using box.put() instead of summary.save()
     box.put(today.toIso8601String(), summary);
   }
 
-  // Add helper method to get all summaries
   List<DailySummary> get allSummaries => dailySummariesBox.values.toList()
     ..sort((a, b) => b.date.compareTo(a.date));
 }
